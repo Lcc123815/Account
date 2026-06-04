@@ -1,0 +1,29 @@
+{
+  "name": "xiaozhangling",
+  "version": "1.0.0",
+  "scripts": {
+    "dev:h5": "cross-env NODE_ENV=development UNI_PLATFORM=h5 UNI_INPUT_DIR=. UNI_CLI_CONTEXT=. vue-cli-service uni-serve",
+    "build:h5": "cross-env NODE_ENV=production UNI_PLATFORM=h5 UNI_INPUT_DIR=. UNI_CLI_CONTEXT=. vue-cli-service uni-build",
+    "dev:mp-weixin": "cross-env NODE_ENV=development UNI_PLATFORM=mp-weixin UNI_INPUT_DIR=. UNI_CLI_CONTEXT=. vue-cli-service uni-build --watch"
+  },
+  "dependencies": {
+    "@dcloudio/uni-app": "latest",
+    "@dcloudio/uni-h5": "latest",
+    "@dcloudio/uni-mp-weixin": "latest",
+    "echarts": "^5.5.1",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@dcloudio/uni-cli-i18n": "^2.0.2-5000720260410001",
+    "@dcloudio/uni-cli-shared": "^2.0.2-5000720260410001",
+    "@dcloudio/uni-i18n": "^2.0.2-5000720260410001",
+    "@dcloudio/uni-migration": "^2.0.2-5000720260410001",
+    "@dcloudio/vue-cli-plugin-uni": "latest",
+    "@dcloudio/webpack-uni-mp-loader": "latest",
+    "@dcloudio/webpack-uni-pages-loader": "latest",
+    "@vue/cli-service": "^5.0.9",
+    "cross-env": "^10.1.0",
+    "vue": "^2.7.16",
+    "vue-template-compiler": "^2.7.16"
+  }
+}

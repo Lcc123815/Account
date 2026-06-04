@@ -1,0 +1,16 @@
+{
+  "name": "xiaozhangling",
+  "appid": "__UNI__XIAOZHANGLING",
+  "description": "基于 uni-app 的 AI 3D 智能记账系统基础版",
+  "versionName": "1.0.0",
+  "versionCode": "100",
+  "transformPx": false,
+  "h5": {
+    "title": "小账灵",
+    "router": { "mode": "hash" }
+  },
+  "mp-weixin": {
+    "appid": "",
+    "setting": { "urlCheck": false }
+  }
+}
