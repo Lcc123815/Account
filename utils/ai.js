@@ -22,10 +22,61 @@ export function localAiAnalyze(bills, budget) {
     summary: `本月收入 ${income.toFixed(2)} 元，支出 ${expense.toFixed(2)} 元。${top ? '主要消费集中在' + top.name + '。' : '暂无明显消费集中分类。'}`,
     suggestions: suggestions.slice(0, 3),
     riskLevel,
-    qa: '已预留通义千问接口，可在 utils/ai.js 的 requestQwenAi 中接入真实接口。'
+    qa: '当前使用本地规则分析，云函数配置完成后将自动使用智谱 AI。'
   }
 }
 
-export function requestQwenAi(payload) {
-  return Promise.resolve(localAiAnalyze(payload.bills || [], payload.budget || { total: 0 }))
+function buildFinancePrompt(payload) {
+  const bills = (payload.bills || []).slice(0, 50).map(item => ({
+    type: item.type,
+    amount: item.amount,
+    category: item.category,
+    date: item.date,
+    remark: item.remark || ''
+  }))
+  const budget = payload.budget || { total: 0, categories: {} }
+  const question = payload.question || '请生成本月消费分析和省钱建议。'
+
+  return `请根据以下记账数据回答用户问题。\n\n用户问题：${question}\n\n预算数据：${JSON.stringify(budget)}\n\n账单数据：${JSON.stringify(bills)}\n\n要求：\n1. 只基于传入账单和预算数据分析。\n2. 指出消费最高的分类。\n3. 判断是否存在超预算风险。\n4. 给出 2-3 条具体省钱建议。\n5. 语言简洁，适合移动端展示。`
+}
+
+function parseAiTextToReport(text, fallback) {
+  const lines = String(text || '').split('\n').map(i => i.trim()).filter(Boolean)
+  const suggestions = lines.filter(i => /^[-\d.、]/.test(i)).map(i => i.replace(/^[-\d.、\s]+/, '')).slice(0, 3)
+
+  return {
+    summary: text || fallback.summary,
+    suggestions: suggestions.length ? suggestions : fallback.suggestions,
+    riskLevel: fallback.riskLevel,
+    qa: text || fallback.qa
+  }
+}
+
+export async function requestQwenAi(payload) {
+  const fallback = localAiAnalyze(payload.bills || [], payload.budget || { total: 0 })
+
+  if (typeof uniCloud === 'undefined') {
+    return fallback
+  }
+
+  try {
+    const res = await uniCloud.callFunction({
+      name: 'ai-chat',
+      data: {
+        systemPrompt: '你是一个专业的个人财务顾问，擅长分析消费数据、预算风险，并给出简洁实用的省钱建议。',
+        prompt: buildFinancePrompt(payload)
+      }
+    })
+
+    if (res.result && res.result.success) {
+      return parseAiTextToReport(res.result.data, fallback)
+    }
+
+    uni.showToast({ title: res.result?.error || 'AI 分析失败，已使用本地分析', icon: 'none' })
+    return fallback
+  } catch (error) {
+    console.error('调用 ai-chat 云函数失败:', error)
+    uni.showToast({ title: '云函数调用失败，已使用本地分析', icon: 'none' })
+    return fallback
+  }
 }

@@ -1,85 +1,359 @@
 <template>
-  <view class="container">
-    <view class="hero card">
-      <view>
-        <view class="title">AI 消费分析</view>
-        <view class="muted">本地规则分析，预留通义千问接入</view>
+  <view class="ai-page">
+    <view class="top-card">
+      <view class="assistant-avatar">AI</view>
+      <view class="top-main">
+        <view class="page-title">AI 消费分析</view>
+        <view class="page-desc">智谱 AI 智能分析你的消费</view>
       </view>
-      <button class="primary-btn btn" @click="analyze">一键生成</button>
+      <button class="small-btn" @click="analyze">生成</button>
     </view>
 
-    <view class="card result">
-      <view class="sub-title">分析摘要</view>
+    <view class="tab-row">
+      <view class="tab" :class="activeTab === 'analysis' ? 'active' : ''" @click="activeTab = 'analysis'">分析</view>
+      <view class="tab" :class="activeTab === 'question' ? 'active' : ''" @click="activeTab = 'question'">提问</view>
+    </view>
+
+    <view v-if="activeTab === 'analysis'" class="card">
+      <view class="section-head">
+        <view>
+          <view class="section-title">分析摘要</view>
+          <view class="section-sub">根据账单和预算生成</view>
+        </view>
+        <view class="risk-tag" :class="report.riskLevel">{{ riskText }}</view>
+      </view>
       <view class="summary">{{ report.summary }}</view>
-      <view class="risk" :class="report.riskLevel">风险等级：{{ riskText }}</view>
     </view>
 
-    <view class="card result">
-      <view class="sub-title">省钱建议</view>
-      <view v-for="(item, index) in report.suggestions" :key="index" class="suggestion">{{ index + 1 }}. {{ item }}</view>
+    <view v-if="activeTab === 'analysis'" class="card">
+      <view class="section-title">省钱建议</view>
+      <view v-for="(item, index) in report.suggestions" :key="index" class="suggestion-item">
+        <view class="suggestion-no">{{ index + 1 }}</view>
+        <view class="suggestion-text">{{ item }}</view>
+      </view>
     </view>
 
-    <view class="card result">
-      <view class="sub-title">自然语言提问</view>
-      <input class="question" :value="question" placeholder="例如：我本月哪里花得最多？" @input="question = $event.detail.value" />
-      <button class="ask" @click="ask">提问</button>
-      <view class="answer">{{ answer }}</view>
+    <view v-if="activeTab === 'question'" class="card question-card">
+      <view class="section-title">自然语言提问</view>
+      <view class="section-sub">可以询问消费最高分类、预算风险或省钱建议</view>
+      <view class="search-box">
+        <text class="search-icon">🔍</text>
+        <input class="question-input" :value="question" placeholder="例如：我本月哪里花得最多？" @input="question = $event.detail.value" />
+      </view>
+      <button class="ask-btn" @click="ask">发送问题</button>
+      <view class="answer-box">
+        <view class="answer-title">AI 回复</view>
+        <view class="answer-text">{{ answer }}</view>
+      </view>
     </view>
 
-    <AiBubble :status="report.riskLevel" :text="bubble" />
-    <ThreeAssistant :status="report.riskLevel === 'normal' ? 'thinking' : report.riskLevel" @tap="analyze" />
+    <view class="quick-card">
+      <view class="section-title">快捷问题</view>
+      <view class="quick-list">
+        <view v-for="item in quickQuestions" :key="item" class="quick-item" @click="fillQuestion(item)">{{ item }}</view>
+      </view>
+    </view>
   </view>
 </template>
 
 <script>
-import AiBubble from '../../components/AiBubble/AiBubble.vue'
-import ThreeAssistant from '../../components/ThreeAssistant/ThreeAssistant.vue'
 import { getBills, getBudget } from '../../utils/storage.js'
 import { localAiAnalyze, requestQwenAi } from '../../utils/ai.js'
 
 export default {
-  components: { AiBubble, ThreeAssistant },
   data() {
     return {
-      report: { summary: '点击一键生成，查看本月消费结构、异常消费和预算风险。', suggestions: ['坚持记录每一笔支出。'], riskLevel: 'normal' },
+      activeTab: 'analysis',
+      report: {
+        summary: '点击生成，查看本月消费结构、异常消费和预算风险。',
+        suggestions: ['坚持记录每一笔支出。'],
+        riskLevel: 'normal'
+      },
       question: '',
-      answer: '你可以询问消费最高分类、预算风险或省钱建议。'
+      answer: '你可以询问消费最高分类、预算风险或省钱建议。',
+      quickQuestions: ['本月哪里花得最多？', '有没有超预算风险？', '给我三条省钱建议']
     }
   },
   computed: {
-    riskText() { return this.report.riskLevel === 'danger' ? '高风险' : this.report.riskLevel === 'warning' ? '需关注' : '正常' },
-    bubble() { return this.report.suggestions[0] || '我可以帮你分析消费。' }
+    riskText() {
+      if (this.report.riskLevel === 'danger') return '高风险'
+      if (this.report.riskLevel === 'warning') return '需关注'
+      return '正常'
+    }
   },
-  onShow() { this.analyze() },
+  onShow() {
+    this.analyze()
+  },
   methods: {
-    analyze() {
+    async analyze() {
+      uni.showLoading({ title: 'AI 分析中...' })
       const bills = getBills()
       const budget = getBudget()
-      this.report = localAiAnalyze(bills, budget)
+      try {
+        const res = await requestQwenAi({ bills, budget })
+        this.report = res
+        uni.hideLoading()
+      } catch {
+        this.report = localAiAnalyze(bills, budget)
+        uni.hideLoading()
+      }
     },
-    ask() {
-      if (!this.question) {
+    fillQuestion(text) {
+      this.question = text
+      this.activeTab = 'question'
+    },
+    async ask() {
+      const question = this.question.trim()
+      if (!question) {
         uni.showToast({ title: '请输入问题', icon: 'none' })
         return
       }
-      requestQwenAi({ question: this.question, bills: getBills(), budget: getBudget() }).then(res => {
+      uni.showLoading({ title: 'AI 思考中...' })
+      try {
+        const res = await requestQwenAi({ question, bills: getBills(), budget: getBudget() })
         this.answer = `${res.summary} ${res.suggestions.join('')}`
-      })
+      } catch {
+        this.answer = 'AI 回答失败，请稍后重试'
+      } finally {
+        uni.hideLoading()
+      }
     }
   }
 }
 </script>
 
 <style scoped>
-.hero { display: flex; justify-content: space-between; align-items: center; }
-.btn { width: 180rpx; height: 70rpx; line-height: 70rpx; margin: 0; font-size: 24rpx; }
-.result { margin-top: 24rpx; }
-.summary { margin-top: 20rpx; line-height: 1.7; color: #334155; font-size: 28rpx; }
-.risk { margin-top: 18rpx; font-weight: 800; color: #10b981; }
-.risk.warning { color: #f59e0b; }
-.risk.danger { color: #ef4444; }
-.suggestion { padding: 18rpx 0; border-bottom: 1rpx solid #e2e8f0; color: #334155; font-size: 26rpx; line-height: 1.6; }
-.question { margin-top: 20rpx; padding: 22rpx; border-radius: 18rpx; background: #f1f5f9; }
-.ask { margin-top: 18rpx; border-radius: 18rpx; color: #fff; background: #2563eb; }
-.answer { margin-top: 20rpx; color: #475569; line-height: 1.7; }
+.ai-page {
+  min-height: 100vh;
+  padding: 28rpx;
+  padding-bottom: 120rpx;
+  background: #f4f7fb;
+  box-sizing: border-box;
+}
+
+.top-card,
+.card,
+.quick-card {
+  background: #fff;
+  border-radius: 26rpx;
+  box-shadow: 0 12rpx 34rpx rgba(47, 128, 237, .08);
+}
+
+.top-card {
+  display: flex;
+  align-items: center;
+  gap: 22rpx;
+  padding: 28rpx;
+}
+
+.assistant-avatar {
+  width: 82rpx;
+  height: 82rpx;
+  line-height: 82rpx;
+  text-align: center;
+  border-radius: 50%;
+  background: #4f8fe8;
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 800;
+}
+
+.top-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.page-title {
+  font-size: 34rpx;
+  font-weight: 800;
+  color: #111;
+}
+
+.page-desc,
+.section-sub {
+  margin-top: 8rpx;
+  color: #999;
+  font-size: 24rpx;
+}
+
+.small-btn {
+  width: 116rpx;
+  height: 58rpx;
+  line-height: 58rpx;
+  margin: 0;
+  border-radius: 999rpx;
+  background: #4f8fe8;
+  color: #fff;
+  font-size: 24rpx;
+}
+
+.tab-row {
+  display: flex;
+  gap: 18rpx;
+  margin: 28rpx 0;
+}
+
+.tab {
+  height: 56rpx;
+  line-height: 56rpx;
+  padding: 0 42rpx;
+  border-radius: 999rpx;
+  background: #e9eef5;
+  color: #8996a8;
+  font-size: 26rpx;
+}
+
+.tab.active {
+  border: 2rpx solid #4f8fe8;
+  background: #fff;
+  color: #4f8fe8;
+  font-weight: 700;
+}
+
+.card,
+.quick-card {
+  margin-top: 24rpx;
+  padding: 28rpx;
+}
+
+.section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.section-title {
+  font-size: 30rpx;
+  font-weight: 800;
+  color: #111;
+}
+
+.risk-tag {
+  height: 46rpx;
+  line-height: 46rpx;
+  padding: 0 22rpx;
+  border-radius: 999rpx;
+  background: #eef5ff;
+  color: #4f8fe8;
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+.risk-tag.warning {
+  background: #fff3e8;
+  color: #f2a35e;
+}
+
+.risk-tag.danger {
+  background: #fff0f0;
+  color: #f03030;
+}
+
+.summary {
+  margin-top: 24rpx;
+  color: #334155;
+  font-size: 28rpx;
+  line-height: 1.7;
+}
+
+.suggestion-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 18rpx;
+  padding: 22rpx 0;
+  border-bottom: 1rpx solid #eeeeee;
+}
+
+.suggestion-item:last-child {
+  border-bottom: 0;
+}
+
+.suggestion-no {
+  width: 44rpx;
+  height: 44rpx;
+  line-height: 44rpx;
+  text-align: center;
+  border-radius: 50%;
+  background: #eef5ff;
+  color: #4f8fe8;
+  font-size: 24rpx;
+  font-weight: 800;
+}
+
+.suggestion-text {
+  flex: 1;
+  color: #334155;
+  font-size: 26rpx;
+  line-height: 1.6;
+}
+
+.search-box {
+  height: 76rpx;
+  display: flex;
+  align-items: center;
+  margin-top: 24rpx;
+  padding: 0 22rpx;
+  border-radius: 20rpx;
+  background: #f4f7fb;
+}
+
+.search-icon {
+  margin-right: 10rpx;
+  color: #999;
+  font-size: 24rpx;
+}
+
+.question-input {
+  flex: 1;
+  height: 76rpx;
+  color: #111;
+  font-size: 28rpx;
+}
+
+.ask-btn {
+  height: 82rpx;
+  line-height: 82rpx;
+  margin-top: 22rpx;
+  border-radius: 999rpx;
+  background: #4f8fe8;
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.answer-box {
+  margin-top: 24rpx;
+  padding: 24rpx;
+  border-radius: 22rpx;
+  background: #f8fafc;
+}
+
+.answer-title {
+  color: #111;
+  font-size: 26rpx;
+  font-weight: 800;
+}
+
+.answer-text {
+  margin-top: 12rpx;
+  color: #475569;
+  font-size: 26rpx;
+  line-height: 1.7;
+}
+
+.quick-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  margin-top: 22rpx;
+}
+
+.quick-item {
+  padding: 16rpx 22rpx;
+  border-radius: 999rpx;
+  background: #eef5ff;
+  color: #4f8fe8;
+  font-size: 24rpx;
+}
 </style>
