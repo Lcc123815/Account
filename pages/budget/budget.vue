@@ -13,7 +13,6 @@
         always-embed="true"
         confirm-type="next"
       />
-      <BudgetProgress label="本月总预算" :used="expense" :total="Number(budget.total)" />
     </view>
 
     <view class="card form-card">
@@ -45,13 +44,11 @@
 </template>
 
 <script>
-import BudgetProgress from '../../components/BudgetProgress/BudgetProgress.vue'
 import { getBudget, saveBudget, getBills } from '../../utils/storage.js'
 import { expenseCategories } from '../../utils/bill.js'
 import { monthBills, sumByType, categorySummary } from '../../utils/statistics.js'
 
 export default {
-  components: { BudgetProgress },
   data() { 
     return { 
       budget: this.initBudget(), // ✅ 修复4：初始化时确保所有分类都有默认值
@@ -192,9 +189,9 @@ export default {
 }
 .primary-btn { 
   margin-top: 26rpx;
-  background: linear-gradient(90deg, #2dd4bf, #3b82f6); 
+  background: #3b82f6; 
   color: #fff;
-  box-shadow: 0 8rpx 20rpx rgba(59, 130, 246, 0.2);
+  box-shadow: 0 4rpx 12rpx rgba(64, 128, 255, 0.08);
 }
 .warn-row { 
   display: flex; 

@@ -4,12 +4,9 @@
       <view class="budget-head">
         <view>
           <view class="budget-title">总预算使用</view>
-          <view class="budget-sub">已用 ¥810 / 预算 ¥3000</view>
+          <view class="budget-sub">已用 ¥{{ monthExpense }} / 预算 ¥{{ budgetTotal }}</view>
         </view>
-        <view class="percent">27%</view>
-      </view>
-      <view class="progress-track">
-        <view class="progress-used"></view>
+        <view class="percent">{{ budgetPercent }}%</view>
       </view>
     </view>
 
@@ -43,7 +40,7 @@
         <input class="field" :value="remark" placeholder="如午餐、兼职" @input="remark = $event.detail.value" />
       </view>
 
-      <button class="submit-btn">{{ activeType === 'income' ? '添加收入' : '添加记录' }}</button>
+      <button class="submit-btn" @click="addRecord">{{ activeType === 'income' ? '添加收入' : '添加记录' }}</button>
     </view>
 
     <view class="float-face" @click="showBalanceToast">😊</view>
@@ -51,14 +48,19 @@
 </template>
 
 <script>
+import { getBills, saveBills, getBudget } from '../../utils/storage.js'
+import { formatDate } from '../../utils/date.js'
+
 export default {
   data() {
     return {
       activeType: 'expense',
       amount: '',
       remark: '',
-      date: '2026-06-04',
+      date: formatDate(),
       categoryIndex: 0,
+      bills: [],
+      budget: getBudget(),
       expenseCategories: ['餐饮', '购物', '交通', '娱乐', '学习', '其他'],
       incomeCategories: ['工资', '兼职', '红包', '理财', '其他']
     }
@@ -66,9 +68,33 @@ export default {
   computed: {
     currentCategories() {
       return this.activeType === 'income' ? this.incomeCategories : this.expenseCategories
+    },
+    currentMonth() {
+      return formatDate().slice(0, 7)
+    },
+    monthExpense() {
+      const total = this.bills
+        .filter(item => item.type === 'expense' && item.date && item.date.startsWith(this.currentMonth))
+        .reduce((sum, item) => sum + Number(item.amount || 0), 0)
+      return total.toFixed(2)
+    },
+    budgetTotal() {
+      return Number(this.budget.total || 0).toFixed(2)
+    },
+    budgetPercent() {
+      const budget = Number(this.budget.total || 0)
+      if (!budget) return 0
+      return Math.min(999, Math.round((Number(this.monthExpense) / budget) * 100))
     }
   },
+  onShow() {
+    this.loadData()
+  },
   methods: {
+    loadData() {
+      this.bills = getBills()
+      this.budget = getBudget()
+    },
     switchType(type) {
       this.activeType = type
       this.categoryIndex = 0
@@ -78,6 +104,51 @@ export default {
     },
     changeDate(e) {
       this.date = e.detail.value
+    },
+    addRecord() {
+      const amount = Number(this.amount)
+      if (!amount || amount <= 0) {
+        uni.showToast({ title: '请输入有效金额', icon: 'none' })
+        return
+      }
+
+      const now = Date.now()
+      const record = {
+        id: `bill-${now}`,
+        type: this.activeType,
+        amount,
+        category: this.currentCategories[this.categoryIndex],
+        date: this.date,
+        remark: this.remark.trim() || this.currentCategories[this.categoryIndex],
+        createTime: now,
+        updateTime: now
+      }
+
+      const bills = [record, ...getBills()]
+      saveBills(bills)
+      this.bills = bills
+      this.amount = ''
+      this.remark = ''
+      uni.showToast({ title: this.activeType === 'income' ? '收入已添加' : '记录已添加', icon: 'success' })
+      this.checkOverBudget(record)
+    },
+    checkOverBudget(record) {
+      if (record.type !== 'expense') return
+      const budget = Number(this.budget.total || 0)
+      if (!budget || Number(this.monthExpense) <= budget) return
+
+      uni.showModal({
+        title: '预算超支提醒',
+        content: '本月支出已超过预算，要问问 AI 怎么调整吗？',
+        confirmText: '问问 AI',
+        cancelText: '稍后再说',
+        success: (res) => {
+          if (res.confirm) {
+            uni.setStorageSync('xiaozhangling_ai_autorun', '有没有超预算风险？请帮我分析并给出调整建议。')
+            uni.switchTab({ url: '/pages/ai/ai' })
+          }
+        }
+      })
     },
     showBalanceToast() {
       uni.showToast({ title: '本月结余不错，继续保持！', icon: 'none' })
@@ -124,21 +195,6 @@ export default {
   font-size: 34rpx;
   font-weight: 700;
   color: #2f80ed;
-}
-
-.progress-track {
-  height: 18rpx;
-  margin-top: 28rpx;
-  overflow: hidden;
-  border-radius: 999rpx;
-  background: #e6edf7;
-}
-
-.progress-used {
-  width: 27%;
-  height: 100%;
-  border-radius: 999rpx;
-  background: #2f80ed;
 }
 
 .tab-row {

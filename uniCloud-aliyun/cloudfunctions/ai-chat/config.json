@@ -1,0 +1,11 @@
+{
+  "envVariables": {
+    "ZHIPU_API_KEY": "6e321c1056e6407d88a3af7f15d8756c.cvndU96SURtQGjjN"
+  },
+  "extends": "",
+  "handlers": [],
+  "runtime": "",
+  "concurrency": 1,
+  "memorySize": 128,
+  "timeout": 60
+}

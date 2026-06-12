@@ -52,11 +52,78 @@ function parseAiTextToReport(text, fallback) {
   }
 }
 
-export async function requestQwenAi(payload) {
+function typeText(text, onStream) {
+  return new Promise((resolve) => {
+    const chars = String(text || '').split('')
+    let index = 0
+    let content = ''
+
+    const timer = setInterval(() => {
+      content += chars[index] || ''
+      index += 1
+      onStream(chars[index - 1] || '', content)
+
+      if (index >= chars.length) {
+        clearInterval(timer)
+        resolve()
+      }
+    }, 18)
+  })
+}
+
+export async function requestQwenAi(payload, onStream) {
   const fallback = localAiAnalyze(payload.bills || [], payload.budget || { total: 0 })
 
   if (typeof uniCloud === 'undefined') {
     return fallback
+  }
+
+  if (onStream && typeof onStream === 'function') {
+    return new Promise((resolve) => {
+      let streamed = false
+
+      try {
+        uniCloud.callFunction({
+          name: 'ai-chat',
+          data: {
+            systemPrompt: '你是一个专业的个人财务顾问，擅长分析消费数据、预算风险，并给出简洁实用的省钱建议。',
+            prompt: buildFinancePrompt(payload),
+            stream: true
+          },
+          onProgress: (res) => {
+            if (!res) return
+            if (res.type === 'data') {
+              streamed = true
+              onStream(res.data, res.fullContent || '')
+            } else if (res.type === 'end') {
+              resolve(parseAiTextToReport(res.fullContent || '', fallback))
+            } else if (res.type === 'error') {
+              uni.showToast({ title: res.error || 'AI 分析失败', icon: 'none' })
+              resolve(fallback)
+            }
+          }
+        }).then(async (res) => {
+          if (res.result && res.result.success) {
+            if (!streamed) {
+              await typeText(res.result.data, onStream)
+            }
+            resolve(parseAiTextToReport(res.result.data, fallback))
+            return
+          }
+
+          uni.showToast({ title: res.result?.error || 'AI 分析失败，已使用本地分析', icon: 'none' })
+          resolve(fallback)
+        }).catch((error) => {
+          console.error('流式调用失败:', error)
+          uni.showToast({ title: '流式调用失败，已使用本地分析', icon: 'none' })
+          resolve(fallback)
+        })
+      } catch (error) {
+        console.error('调用 ai-chat 云函数失败:', error)
+        uni.showToast({ title: '云函数调用失败，已使用本地分析', icon: 'none' })
+        resolve(fallback)
+      }
+    })
   }
 
   try {
